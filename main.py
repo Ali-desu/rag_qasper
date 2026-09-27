@@ -1,5 +1,39 @@
 from Ingestor import Ingestor
 from embedder import Embedder
+from tfidf_index import TfidfIndex
+
+
+def get_evidence(answers):
+    """All text evidence paragraphs for one question, from every annotator."""
+    evidence = set()
+    for answer in answers["answer"]:
+        for e in answer["evidence"]:
+            if not e.startswith("FLOAT SELECTED"):
+                evidence.add(e)
+    return evidence
+
+
+def first_hit_rank(top_indices, chunks, evidence):
+    """Rank (1-based) of the first correct chunk in the top results, or None."""
+    for rank, i in enumerate(top_indices, start=1):
+        if chunks[i]["text"] in evidence:
+            return rank
+    return None
+
+
+def print_results(name, top_indices, scores, chunks, evidence):
+    print(f"  [{name}]")
+    for rank, i in enumerate(top_indices, start=1):
+        chunk = chunks[i]
+        hit = "✅" if chunk["text"] in evidence else "  "
+        print(f"    {rank}. {hit} {scores[i]:.3f}  [{chunk['section']}]  {chunk['text'][:70]}...")
+
+
+def summarize(name, ranks):
+    found = [r for r in ranks if r is not None]
+    recall = len(found) / len(ranks)
+    mrr = sum(1 / r for r in found) / len(ranks)
+    print(f"{name:<10} recall@5 = {recall:.2f}   MRR = {mrr:.3f}")
 
 
 def main():
@@ -7,49 +41,45 @@ def main():
     dataset = ingestor.load_qasper_validation()
     chunked_data = ingestor.chunk_data(dataset)
 
-    print(f"Loaded {len(dataset)} papers")
-    print(f"Chunked into {len(chunked_data)} chunks")
-
-    embedder = Embedder()
-
-    # chunks of the first paper (chunks are in the same order as the dataset)
-    paper_id = chunked_data[0]["paper_id"]
-    first_paper_chunks = []
-    for chunk in chunked_data:
-        if chunk["paper_id"] == paper_id:
-            first_paper_chunks.append(chunk)
-        else:
-            break
-    print(f"Paper {paper_id}: {len(first_paper_chunks)} chunks")
-
-    # embed all chunks of this paper
-    chunk_vectors = embedder.embed_documents([c["text"] for c in first_paper_chunks])
-
-    # the same paper in the dataset, to get its questions
+    # chunks of the first paper
     paper = dataset[0]
-    assert paper["id"] == paper_id
+    paper_chunks = [c for c in chunked_data if c["paper_id"] == paper["id"]]
+    texts = [c["text"] for c in paper_chunks]
+    print(f"Paper {paper['id']}: {len(paper_chunks)} chunks")
+
+    # build both indexes on the same chunks
+    embedder = Embedder()
+    chunk_vectors = embedder.embed_documents(texts)
+
+    tfidf = TfidfIndex()
+    tfidf.compute_idf(texts)
+
+    dense_ranks, tfidf_ranks = [], []
 
     qas = paper["qas"]
     for question, answers in zip(qas["question"], qas["answers"]):
-        # collect the evidence paragraphs from all annotators, skipping tables/figures
-        evidence = set()
-        for answer in answers["answer"]:
-            for e in answer["evidence"]:
-                if not e.startswith("FLOAT SELECTED"):
-                    evidence.add(e)
-
+        evidence = get_evidence(answers)
         if not evidence:
-            continue  # unanswerable or table-only question: skip for now
-
-        query_vector = embedder.embed_query(question)
-        scores = chunk_vectors @ query_vector
-        top5 = scores.argsort()[::-1][:5]
+            continue  # unanswerable or table-only
 
         print(f"\nQ: {question}")
-        for rank, i in enumerate(top5, start=1):
-            chunk = first_paper_chunks[i]
-            hit = "✅" if chunk["text"] in evidence else "  "
-            print(f"  {rank}. {hit} {scores[i]:.3f}  [{chunk['section']}]  {chunk['text'][:90]}...")
+
+        # dense (embeddings)
+        dense_scores = chunk_vectors @ embedder.embed_query(question)
+        dense_top = dense_scores.argsort()[::-1][:5]
+        print_results("dense", dense_top, dense_scores, paper_chunks, evidence)
+
+        # sparse (TF-IDF)
+        tfidf_scores = tfidf.score(question)
+        tfidf_top = [i for i, _ in tfidf.search(question, k=5)]
+        print_results("tf-idf", tfidf_top, tfidf_scores, paper_chunks, evidence)
+
+        dense_ranks.append(first_hit_rank(dense_top, paper_chunks, evidence))
+        tfidf_ranks.append(first_hit_rank(tfidf_top, paper_chunks, evidence))
+
+    print(f"\n=== {len(dense_ranks)} questions ===")
+    summarize("dense", dense_ranks)
+    summarize("tf-idf", tfidf_ranks)
 
 
 if __name__ == "__main__":
