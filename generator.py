@@ -34,7 +34,7 @@ class Generator:
         )
 
     def generate(self, question, chunks):
-        """Send the prompt to Ollama and return the answer text."""
+        """Send the prompt to Ollama and return the answer text and timing stats."""
         response = httpx.post(
             self.url,
             json={
@@ -50,4 +50,14 @@ class Generator:
             timeout=300,
         )
         response.raise_for_status()
-        return response.json()["message"]["content"].strip()
+        data = response.json()
+
+        stats = {
+            "load_s": data["load_duration"] / 1e9,
+            "prompt_tokens": data["prompt_eval_count"],
+            "prefill_s": data["prompt_eval_duration"] / 1e9,
+            "output_tokens": data["eval_count"],
+            "decode_s": data["eval_duration"] / 1e9,
+            "tok_per_s": data["eval_count"] / (data["eval_duration"] / 1e9),
+        }
+        return data["message"]["content"].strip(), stats
