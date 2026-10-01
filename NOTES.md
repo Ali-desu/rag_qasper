@@ -84,11 +84,11 @@ What I take from it:
 - **That's the case for a reranker.** Rerank the top 20 and the ceiling for hit@5 is around 96%.
 - About 4% of questions (~40) have no evidence even in the top 20. Those are real retrieval failures that a reranker can't fix.
 
-## Next
 
-- [ ] Rerank the top 20 with `bge-reranker-base` and measure hit@1, hit@5, MRR and latency
-- [ ] Same with Julia 1 (0-3 usefulness score, like GPT Researcher does with Jev), with and without a threshold
-- [ ] Read ~20 missed questions and look for patterns
-- [ ] Experiments, one at a time: section name prepended to chunks, drop Acknowledgments, clean `BIBREF` / `TABREF` noise, `arctic-embed-m`, weighted RRF
-- [ ] Evaluate the open setting (search all papers, no filter)
-- [ ] Generation with a local model through Ollama, with citations
+### 2026-10-1: added reranker and generator
+
+- **BAAI/bge-reranker-v2-m3 reranker** added, I tested it on 20 papers and it improved the results. the correct results are more likely to appear at the top of the list , the only problem is that the model is very slow on cpu , took 50 minutes on 20 papers . i will probably change it to another smaller reranker
+
+- **qwen model** works good but is also pretty slow in cpu , and i should add another model in order to approve of the model's results and see if they are correct and are using the chunks retrieved
+
+overall we do have now working components of an end to end rag system.
