@@ -27,27 +27,31 @@ These are early results from my current setup, not a claim that the system is fi
 
 ## Running it
 
-The project is still mostly a set of Python modules and a notebook, so there isn’t a one-command app entry point yet. The notebook, `explore.ipynb`, is the place to explore the current pipeline.
-
-To prepare the data, install the packages in `requirements.txt`, then run:
+Install the packages in `requirements.txt`. The paper data and SQLite database should be available in `data/`. To download the QASPER validation data if needed, run:
 
 ```bash
-python download_qasper.py
+python scripts/download_qasper.py
 ```
 
-This downloads the QASPER validation data into `data/qasper_validation.parquet`. The notebook and `Ingestor.py` use that file to build the chunks and database. Embedding models are downloaded by Sentence Transformers the first time they are used. To generate answers, Ollama must be running locally with the model configured in `generator.py` available.
+The notebook in `notebooks/explore.ipynb` is used to build the database. Start Ollama with the model configured in `src/rag/generator.py`, then start the API and UI in separate terminals from the project root:
+
+```bash
+uvicorn backend.app.main:app --reload
+```
+
+```bash
+streamlit run frontend/app.py
+```
+
+The app lists papers from the database, shows their abstracts and sections, and sends questions to the API. The API is also available at `http://localhost:8000/docs`.
 
 ## Project files
 
-- `Ingestor.py` loads QASPER and turns paper paragraphs into chunks.
-- `embedder.py` creates document and query embeddings.
-- `vector_db.py` stores chunks, vectors, and the full-text search index in SQLite.
-- `tfidf_index.py` is a small TF-IDF implementation I wrote while learning about sparse retrieval.
-- `retriever.py` runs dense, keyword, or hybrid search.
-- `reranker.py` reranks retrieved chunks with a cross-encoder.
-- `generator.py` calls Ollama with the question and retrieved chunks.
-- `download_qasper.py` downloads the validation split.
-- `explore.ipynb` is the current notebook for trying the pieces together.
+- `src/rag/` contains the ingestion, embedding, storage, retrieval, reranking, and generation code.
+- `backend/app/main.py` provides the FastAPI endpoints.
+- `frontend/app.py` contains the Streamlit interface.
+- `scripts/download_qasper.py` downloads the validation split.
+- `notebooks/explore.ipynb` is the notebook for trying the pipeline and preparing the database.
 - `NOTES.md` has experiment results and implementation decisions.
 
 ## Next steps

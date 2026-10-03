@@ -50,6 +50,7 @@ safetensors==0.8.0
 scikit-learn==1.9.1
 scipy==1.18.1
 sentence-transformers==6.1.0
+streamlit
 setuptools==84.0.0
 shellingham==1.5.4
 six==1.17.0

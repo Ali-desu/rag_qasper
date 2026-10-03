@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from src.rag.generator import Generator
 from src.rag.retriever import Retriever
@@ -14,6 +14,26 @@ class QuestionRequest(BaseModel):
 
 generator = Generator()
 retriever = Retriever(embedder=Embedder(), store=VectorStore())
+
+
+@app.get("/papers")
+async def list_papers():
+    """List papers available in the database."""
+    return retriever.store.get_papers()
+
+
+@app.get("/papers/{paper_id}")
+async def get_paper(paper_id: str):
+    """Return a paper's metadata and paragraphs in reading order."""
+    paper = next(
+        (paper for paper in retriever.store.get_papers() if paper["paper_id"] == paper_id),
+        None,
+    )
+    if paper is None:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    paper["sections"] = retriever.store.get_paper_chunks(paper_id)
+    return paper
 
 
 @app.post("/ask")

@@ -37,6 +37,16 @@ class VectorStore:
     def create_tables(self):
         """Create the three tables if they don't exist yet (safe to call every time)."""
         with self.conn:
+
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS papers(
+                    paper_id TEXT PRIMARY KEY,
+                    title    TEXT,
+                    abstract TEXT
+                )
+            """)
+
+
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS chunks (
                     id          INTEGER PRIMARY KEY,
@@ -72,6 +82,7 @@ class VectorStore:
             self.conn.execute("DROP TABLE IF EXISTS chunks")
             self.conn.execute("DROP TABLE IF EXISTS vec_chunks")
             self.conn.execute("DROP TABLE IF EXISTS fts_chunks")
+            self.conn.execute("DROP TABLE IF EXISTS papers")
         self.create_tables()
 
     # ---------- writing ----------
@@ -191,6 +202,38 @@ class VectorStore:
             for row in rows
         }
         return [by_id[i] for i in ids if i in by_id]
+
+
+    def add_paper(self, paper_id, title, authors, abstract):
+        """Add a paper's metadata to the papers table."""
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO papers (paper_id, title, abstract) "
+                "VALUES (?, ?, ?)",
+                (paper_id, title, abstract),
+            )
+
+    def get_papers(self):
+        """Return a list of all papers in the database."""
+        rows = self.conn.execute(
+            "SELECT paper_id, title, abstract FROM papers ORDER BY title COLLATE NOCASE"
+        ).fetchall()
+        return [
+            {"paper_id": row[0], "title": row[1], "abstract": row[2]}
+            for row in rows
+        ]
+
+    def get_paper_chunks(self, paper_id):
+        """Return a paper's paragraphs in their original order."""
+        rows = self.conn.execute(
+            "SELECT section, chunk_index, text FROM chunks "
+            "WHERE paper_id = ? ORDER BY chunk_index",
+            (paper_id,),
+        ).fetchall()
+        return [
+            {"section": row[0] or "Untitled", "chunk_index": row[1], "text": row[2]}
+            for row in rows
+        ]
 
     def close(self):
         """Close the connection."""
