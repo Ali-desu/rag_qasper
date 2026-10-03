@@ -61,3 +61,4 @@ class Generator:
             "tok_per_s": data["eval_count"] / (data["eval_duration"] / 1e9),
         }
         return data["message"]["content"].strip(), stats
+        
