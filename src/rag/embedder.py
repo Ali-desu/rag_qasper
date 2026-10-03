@@ -5,7 +5,7 @@ class Embedder:
         self.model_name = model_name
         self.batch_size = batch_size
         self.model = SentenceTransformer(model_name)
-        self.dimension = self.model.get_sentence_embedding_dimension()
+        self.dimension = self.model.get_embedding_dimension()
 
     def embed_documents(self, texts):
         return self.model.encode(
