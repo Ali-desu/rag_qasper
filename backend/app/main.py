@@ -1,10 +1,12 @@
+from functools import lru_cache
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from src.rag.generator import Generator
 from src.rag.retriever import Retriever
 from src.rag.vector_db import VectorStore
 from src.rag.embedder import Embedder
-
+from src.rag.reranker import Reranker
 
 app = FastAPI()
 
@@ -14,6 +16,12 @@ class QuestionRequest(BaseModel):
 
 generator = Generator()
 retriever = Retriever(embedder=Embedder(), store=VectorStore())
+
+
+@lru_cache(maxsize=1)
+def get_reranker():
+    """Load the reranker once and reuse it for later requests."""
+    return Reranker()
 
 
 @app.get("/papers")
@@ -42,7 +50,10 @@ async def ask_question(request: QuestionRequest):
     paper_id = request.paper_id
 
     # Retrieve relevant chunks from the vector store
-    chunks = retriever.search(question, k=3, paper_id=paper_id)
+    chunks = retriever.search(question, k=5, paper_id=paper_id)
+
+    # Rerank the chunks
+    chunks = get_reranker().rerank(question, chunks, 5)
 
     # Generate an answer using the retrieved chunks
     answer, stats = generator.generate(question, chunks)
